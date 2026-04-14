@@ -14,7 +14,7 @@ const GROUP_NAME = "V";
 const SECRET_KEY = process.env.SECRET_KEY;
 const MONGO_URI = process.env.MONGO_URI;
 
-// 🌐 Start Express server
+// 🌐 Start server
 app.listen(PORT, () => {
   console.log(`🌐 Server running on port ${PORT}`);
 });
@@ -39,10 +39,11 @@ const client = new Client({
   }
 });
 
-// 📱 QR (only first time)
+// 📱 QR EVENT (FIXED)
 client.on("qr", (qr) => {
-  console.log("📱 Scan QR:");
-  qrcode.generate(qr, { small: true });
+  console.log("📱 Scan QR below:");
+  console.log(qr); // 👈 important for Render logs
+  qrcode.generate(qr, { small: true }); // works locally
 });
 
 // ✅ Ready
@@ -55,12 +56,12 @@ client.on("authenticated", () => {
   console.log("✅ Session saved in MongoDB");
 });
 
-// 🌐 Health route
+// 🌐 Health check
 app.get("/", (req, res) => {
   res.send("✅ Bot is running");
 });
 
-// 🔐 API endpoint (triggered by cron)
+// 🔐 API trigger (cron)
 app.get("/send", async (req, res) => {
   try {
     if (req.query.key !== SECRET_KEY) {
@@ -78,7 +79,7 @@ app.get("/send", async (req, res) => {
   }
 });
 
-// 💰 Send gold rate function
+// 💰 Send gold rate
 async function sendGoldRate() {
   try {
     const rates = await getGoldRate();
@@ -117,14 +118,12 @@ async function sendGoldRate() {
   }
 }
 
-// ✅ CONNECT DB FIRST → THEN START WHATSAPP
+// ✅ CONNECT DB → THEN START WHATSAPP
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB connected");
 
-    // 🚀 Start WhatsApp AFTER DB is ready
-    client.initialize();
-
+    client.initialize(); // 🚀 start after DB ready
   })
   .catch(err => {
     console.log("❌ Mongo error:", err.message);
