@@ -1,13 +1,12 @@
 {
   "name": "gold-bot",
   "version": "1.0.0",
-  "description": "WhatsApp Gold Rate Automation Bot (Baileys)",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.8",
