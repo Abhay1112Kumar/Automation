@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 const GROUP_NAME = "V";
 const SECRET_KEY = process.env.SECRET_KEY;
 
-// 🌐 server
+// 🌐 Server
 app.listen(PORT, () => {
   console.log("🌐 Server running on port", PORT);
 });
@@ -25,7 +25,7 @@ app.get("/", (req, res) => {
   res.send("Bot is running ✅");
 });
 
-// 💰 gold rate API
+// 💰 Gold API
 async function getGoldRate() {
   const metalRes = await axios.get("https://metals.live/api/spot");
   const goldUSD = metalRes.data.gold;
@@ -40,25 +40,35 @@ async function getGoldRate() {
   return { per10g_24k, per10g_22k, per10g_18k };
 }
 
+// 🚀 Bot
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: true
+    printQRInTerminal: false
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 📱 QR handled automatically
+  // 🔥 IMPORTANT: QR HANDLING FIX (THIS WAS MISSING)
   sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect } = update;
+    const { connection, qr, lastDisconnect } = update;
 
+    // 📱 QR DISPLAY
+    if (qr) {
+      console.log("📱 SCAN THIS QR:");
+      console.log(qr);
+      qrcode.generate(qr, { small: true });
+    }
+
+    // 🔁 reconnect logic
     if (connection === "close") {
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
 
       if (shouldReconnect) {
+        console.log("🔁 Reconnecting...");
         startBot();
       }
     }
@@ -68,7 +78,7 @@ async function startBot() {
     }
   });
 
-  // 💰 send message function
+  // 💰 Send message
   async function sendGoldRate() {
     const rates = await getGoldRate();
 
@@ -85,9 +95,6 @@ async function startBot() {
 🔷 22K: ₹${rates.per10g_22k}
 🔸 18K: ₹${rates.per10g_18k}`;
 
-    console.log(msg);
-
-    // send to all chats (you can filter group later)
     const chats = await sock.groupFetchAllParticipating();
 
     for (let id in chats) {
@@ -98,7 +105,7 @@ async function startBot() {
     }
   }
 
-  // 🔐 API trigger (for cron)
+  // 🔐 API trigger (cron)
   app.get("/send", async (req, res) => {
     if (req.query.key !== SECRET_KEY) {
       return res.status(403).send("❌ Unauthorized");
@@ -109,4 +116,5 @@ async function startBot() {
   });
 }
 
+// ▶️ start bot
 startBot();
