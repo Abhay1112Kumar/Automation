@@ -10,27 +10,25 @@ const getGoldRate = require("./goldRate");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const GROUP_NAME = "V"; // your WhatsApp group name
+const GROUP_NAME = "V";
 const SECRET_KEY = process.env.SECRET_KEY;
-
-// MongoDB connection
 const MONGO_URI = process.env.MONGO_URI;
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.log("❌ Mongo error:", err.message));
+// 🌐 Start server
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+});
 
-// Mongo store
+// 🧠 Mongo Store
 const store = new MongoStore({ mongoose });
 
-// WhatsApp client
+// 🤖 WhatsApp Client
 const client = new Client({
   authStrategy: new RemoteAuth({
     store: store,
     backupSyncIntervalMs: 300000
   }),
   puppeteer: {
-    executablePath: process.env.PUPPETEER_EXEC_PATH || undefined,
     headless: true,
     args: [
       "--no-sandbox",
@@ -41,23 +39,28 @@ const client = new Client({
   }
 });
 
-// QR code (only first time)
+// 📱 QR (first time only)
 client.on("qr", (qr) => {
   console.log("📱 Scan QR:");
   qrcode.generate(qr, { small: true });
 });
 
-// Ready
+// ✅ Ready
 client.on("ready", () => {
   console.log("✅ WhatsApp Bot Ready!");
 });
 
-// Session stored
+// 💾 Session stored
 client.on("authenticated", () => {
   console.log("✅ Session saved in MongoDB");
 });
 
-// API endpoint (triggered by cron-job.org)
+// 🌐 Health route
+app.get("/", (req, res) => {
+  res.send("✅ Bot is running");
+});
+
+// 🔥 API trigger
 app.get("/send", async (req, res) => {
   try {
     if (req.query.key !== SECRET_KEY) {
@@ -75,17 +78,7 @@ app.get("/send", async (req, res) => {
   }
 });
 
-// Health check route (important for Render)
-app.get("/", (req, res) => {
-  res.send("✅ Bot is running");
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🌐 Server running on port ${PORT}`);
-});
-
-// Send gold rate
+// 💰 Send gold rate
 async function sendGoldRate() {
   try {
     const rates = await getGoldRate();
@@ -124,5 +117,15 @@ async function sendGoldRate() {
   }
 }
 
-// Initialize WhatsApp
-client.initialize();
+// ✅ CONNECT MONGODB FIRST → THEN START WHATSAPP
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log("✅ MongoDB connected");
+
+    // 🚀 Start WhatsApp AFTER DB ready
+    client.initialize();
+
+  })
+  .catch(err => {
+    console.log("❌ Mongo error:", err.message);
+  });
