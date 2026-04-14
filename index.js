@@ -16,16 +16,15 @@ const PORT = process.env.PORT || 3000;
 const GROUP_NAME = "V";
 const SECRET_KEY = process.env.SECRET_KEY;
 
-// 🌐 Server
 app.listen(PORT, () => {
   console.log("🌐 Server running on port", PORT);
 });
 
 app.get("/", (req, res) => {
-  res.send("Bot is running ✅");
+  res.send("Bot running ✅");
 });
 
-// 💰 Gold API
+// 💰 GOLD RATE API
 async function getGoldRate() {
   const metalRes = await axios.get("https://metals.live/api/spot");
   const goldUSD = metalRes.data.gold;
@@ -40,72 +39,84 @@ async function getGoldRate() {
   return { per10g_24k, per10g_22k, per10g_18k };
 }
 
-// 🚀 Bot
+// 🚀 BOT START
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false
+    printQRInTerminal: false,
+    browser: ["GoldBot", "Chrome", "1.0.0"]
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 🔥 IMPORTANT: QR HANDLING FIX (THIS WAS MISSING)
+  // 📱 CONNECTION HANDLER (FIXED STABLE VERSION)
   sock.ev.on("connection.update", (update) => {
     const { connection, qr, lastDisconnect } = update;
 
-    // 📱 QR DISPLAY
+    // QR
     if (qr) {
-      console.log("📱 SCAN THIS QR:");
+      console.log("\n📱 SCAN THIS QR:");
       console.log(qr);
       qrcode.generate(qr, { small: true });
     }
 
-    // 🔁 reconnect logic
-    if (connection === "close") {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-
-      if (shouldReconnect) {
-        console.log("🔁 Reconnecting...");
-        startBot();
-      }
+    // OPEN
+    if (connection === "open") {
+      console.log("✅ WhatsApp Connected Successfully!");
     }
 
-    if (connection === "open") {
-      console.log("✅ WhatsApp Connected!");
+    // CLOSE (NO LOOP CRASH)
+    if (connection === "close") {
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+
+      console.log("❌ Connection closed. Code:", statusCode);
+
+      // If logged out → STOP completely
+      if (statusCode === DisconnectReason.loggedOut) {
+        console.log("🚫 Logged out. Delete auth folder & rescan QR.");
+        return;
+      }
+
+      // Safe restart after delay
+      console.log("🔁 Reconnecting in 5s...");
+      setTimeout(() => startBot(), 5000);
     }
   });
 
-  // 💰 Send message
+  // 💰 SEND MESSAGE
   async function sendGoldRate() {
-    const rates = await getGoldRate();
+    try {
+      const rates = await getGoldRate();
 
-    const today = new Date().toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    });
+      const today = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
 
-    const msg = `🌅 *Good Morning!*
+      const msg = `🌅 *Good Morning!*
 💰 *Gold Rate — ${today}*
 
 🔶 24K: ₹${rates.per10g_24k}
 🔷 22K: ₹${rates.per10g_22k}
 🔸 18K: ₹${rates.per10g_18k}`;
 
-    const chats = await sock.groupFetchAllParticipating();
+      const chats = await sock.groupFetchAllParticipating();
 
-    for (let id in chats) {
-      if (chats[id].subject === GROUP_NAME) {
-        await sock.sendMessage(id, { text: msg });
-        console.log("✅ Sent to group");
+      for (let id in chats) {
+        if (chats[id].subject === GROUP_NAME) {
+          await sock.sendMessage(id, { text: msg });
+          console.log("✅ Message sent to group");
+        }
       }
+    } catch (err) {
+      console.log("❌ Send error:", err.message);
     }
   }
 
-  // 🔐 API trigger (cron)
+  // 🔐 API TRIGGER (FOR CRON)
   app.get("/send", async (req, res) => {
     if (req.query.key !== SECRET_KEY) {
       return res.status(403).send("❌ Unauthorized");
@@ -116,5 +127,4 @@ async function startBot() {
   });
 }
 
-// ▶️ start bot
 startBot();
