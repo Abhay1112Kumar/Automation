@@ -1,158 +1,112 @@
 require("dotenv").config();
 
-const { Client, RemoteAuth } = require("whatsapp-web.js");
-const { MongoStore } = require("wwebjs-mongo");
-const mongoose = require("mongoose");
-const qrcode = require("qrcode-terminal");
 const express = require("express");
-const getGoldRate = require("./goldRate");
-const path = require("path");
-const fs = require("fs");
+const qrcode = require("qrcode-terminal");
+const axios = require("axios");
+
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason
+} = require("@whiskeysockets/baileys");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const GROUP_NAME = "V";
 const SECRET_KEY = process.env.SECRET_KEY;
-const MONGO_URI = process.env.MONGO_URI;
 
-// 🌐 Server
+// 🌐 server
 app.listen(PORT, () => {
-  console.log(`🌐 Server running on port ${PORT}`);
+  console.log("🌐 Server running on port", PORT);
 });
 
-// 🧠 Mongo store
-const store = new MongoStore({ mongoose });
+app.get("/", (req, res) => {
+  res.send("Bot is running ✅");
+});
 
-// 📦 Dynamic Chrome resolver (IMPORTANT FIX)
-function getChromePath() {
-  try {
-    const base = path.join(__dirname, ".cache", "puppeteer", "chrome");
-    if (!fs.existsSync(base)) return null;
+// 💰 gold rate API
+async function getGoldRate() {
+  const metalRes = await axios.get("https://metals.live/api/spot");
+  const goldUSD = metalRes.data.gold;
 
-    const versions = fs.readdirSync(base);
-    if (!versions.length) return null;
+  const fxRes = await axios.get("https://open.er-api.com/v6/latest/USD");
+  const usdInr = fxRes.data.rates.INR;
 
-    const latest = versions[0];
+  const per10g_24k = ((goldUSD / 31.1035) * 10 * usdInr).toFixed(2);
+  const per10g_22k = (per10g_24k * 0.916).toFixed(2);
+  const per10g_18k = (per10g_24k * 0.75).toFixed(2);
 
-    return path.join(
-      base,
-      latest,
-      "chrome-linux64",
-      "chrome"
-    );
-  } catch (e) {
-    console.log("⚠️ Chrome path error:", e.message);
-    return null;
-  }
+  return { per10g_24k, per10g_22k, per10g_18k };
 }
 
-// 🤖 WhatsApp client
-const client = new Client({
-  authStrategy: new RemoteAuth({
-    store: store,
-    backupSyncIntervalMs: 300000
-  }),
-  puppeteer: {
-    executablePath: getChromePath(), // 🔥 FIXED
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu"
-    ]
-  }
-});
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("auth");
 
-// 📱 QR
-client.on("qr", (qr) => {
-  console.log("📱 Scan QR below:");
-  console.log(qr);
-  qrcode.generate(qr, { small: true });
-});
-
-// ✅ Ready
-client.on("ready", () => {
-  console.log("✅ WhatsApp Bot Ready!");
-});
-
-// 💾 Auth saved
-client.on("authenticated", () => {
-  console.log("✅ Session saved in MongoDB");
-});
-
-// 🧪 Debug
-client.on("loading_screen", (percent, message) => {
-  console.log("⏳ Loading:", percent, message);
-});
-
-client.on("auth_failure", (msg) => {
-  console.log("❌ Auth failure:", msg);
-});
-
-client.on("disconnected", (reason) => {
-  console.log("❌ Disconnected:", reason);
-});
-
-// 🌐 Health route
-app.get("/", (req, res) => {
-  res.send("✅ Bot is running");
-});
-
-// 🔐 Cron/API trigger
-app.get("/send", async (req, res) => {
-  try {
-    if (req.query.key !== SECRET_KEY) {
-      return res.status(403).send("❌ Unauthorized");
-    }
-
-    await sendGoldRate();
-    res.send("✅ Sent");
-
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("❌ Failed");
-  }
-});
-
-// 💰 Gold rate sender
-async function sendGoldRate() {
-  const rates = await getGoldRate();
-
-  const today = new Date().toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: true
   });
 
-  const msg = `🌅 *Good Morning!*
+  sock.ev.on("creds.update", saveCreds);
+
+  // 📱 QR handled automatically
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect } = update;
+
+    if (connection === "close") {
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+
+      if (shouldReconnect) {
+        startBot();
+      }
+    }
+
+    if (connection === "open") {
+      console.log("✅ WhatsApp Connected!");
+    }
+  });
+
+  // 💰 send message function
+  async function sendGoldRate() {
+    const rates = await getGoldRate();
+
+    const today = new Date().toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    });
+
+    const msg = `🌅 *Good Morning!*
 💰 *Gold Rate — ${today}*
 
 🔶 24K: ₹${rates.per10g_24k}
 🔷 22K: ₹${rates.per10g_22k}
 🔸 18K: ₹${rates.per10g_18k}`;
 
-  const chats = await client.getChats();
-  const group = chats.find(c => c.isGroup && c.name === GROUP_NAME);
+    console.log(msg);
 
-  if (group) {
-    await group.sendMessage(msg);
-    console.log("✅ Message sent");
-  } else {
-    console.log("❌ Group not found");
+    // send to all chats (you can filter group later)
+    const chats = await sock.groupFetchAllParticipating();
+
+    for (let id in chats) {
+      if (chats[id].subject === GROUP_NAME) {
+        await sock.sendMessage(id, { text: msg });
+        console.log("✅ Sent to group");
+      }
+    }
   }
+
+  // 🔐 API trigger (for cron)
+  app.get("/send", async (req, res) => {
+    if (req.query.key !== SECRET_KEY) {
+      return res.status(403).send("❌ Unauthorized");
+    }
+
+    await sendGoldRate();
+    res.send("✅ Sent");
+  });
 }
 
-// 🚀 Mongo → start bot
-mongoose.connect(MONGO_URI)
-  .then(async () => {
-    console.log("✅ MongoDB connected");
-
-    console.log("🚀 Starting WhatsApp...");
-    await client.initialize();
-
-  })
-  .catch(err => {
-    console.log("❌ Mongo error:", err.message);
-  });
+startBot();
