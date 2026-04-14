@@ -1,20 +1,23 @@
 {
   "name": "gold-bot",
   "version": "1.0.0",
+  "description": "WhatsApp Gold Rate Automation Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "author": "Abhay Kumar",
+  "license": "ISC",
   "dependencies": {
     "axios": "^1.6.0",
-    "dotenv": "^17.4.2",
+    "dotenv": "^16.4.0",
     "express": "^4.18.2",
     "mongoose": "^8.0.0",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.23.0",
+    "whatsapp-web.js": "^1.25.0",
     "wwebjs-mongo": "^1.1.0"
   },
   "puppeteer": {
-  "cacheDirectory": "./.cache/puppeteer"
-}
+    "cacheDirectory": "./.cache/puppeteer"
+  }
 }
