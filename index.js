@@ -29,6 +29,7 @@ const client = new Client({
     backupSyncIntervalMs: 300000
   }),
   puppeteer: {
+    executablePath: "/opt/render/project/src/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome",
     headless: true,
     args: [
       "--no-sandbox",
@@ -42,8 +43,8 @@ const client = new Client({
 // 📱 QR EVENT
 client.on("qr", (qr) => {
   console.log("📱 Scan QR below:");
-  console.log(qr); // for Render logs
-  qrcode.generate(qr, { small: true }); // for local
+  console.log(qr); // Render logs
+  qrcode.generate(qr, { small: true }); // local
 });
 
 // ✅ READY
@@ -56,7 +57,7 @@ client.on("authenticated", () => {
   console.log("✅ Session saved in MongoDB");
 });
 
-// 🧪 DEBUG EVENTS (VERY IMPORTANT)
+// 🧪 DEBUG EVENTS
 client.on("loading_screen", (percent, message) => {
   console.log("⏳ Loading:", percent, message);
 });
@@ -74,7 +75,7 @@ app.get("/", (req, res) => {
   res.send("✅ Bot is running");
 });
 
-// 🔐 API trigger
+// 🔐 API trigger (for cron)
 app.get("/send", async (req, res) => {
   try {
     if (req.query.key !== SECRET_KEY) {
@@ -131,7 +132,7 @@ async function sendGoldRate() {
   }
 }
 
-// ✅ CONNECT DB → THEN START WHATSAPP
+// ✅ CONNECT DB → START WHATSAPP
 mongoose.connect(MONGO_URI)
   .then(async () => {
     console.log("✅ MongoDB connected");
