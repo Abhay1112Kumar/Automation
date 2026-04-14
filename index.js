@@ -1,70 +1,67 @@
+const express = require("express");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const qrcode = require("qrcode-terminal");
 require("dotenv").config();
 
-const express = require("express");
-const qrcode = require("qrcode-terminal");
-
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason
-} = require("@whiskeysockets/baileys");
-
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-const GROUP_NAME = "V";
+const PORT = process.env.PORT || 10000;
 
 app.get("/", (req, res) => {
-  res.send("Bot Running ✅");
+  res.send("Gold Bot is running 🚀");
 });
 
 app.listen(PORT, () => {
-  console.log("🌐 Server running on port", PORT);
+  console.log(`🌐 Server running on port ${PORT}`);
 });
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  console.log("🚀 Starting WhatsApp...");
+
+  const { state, saveCreds } = await useMultiFileAuthState("./auth");
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: true, // IMPORTANT: forces QR in logs
+    printQRInTerminal: false,
     browser: ["GoldBot", "Chrome", "1.0.0"]
   });
 
+  // SAVE SESSION
   sock.ev.on("creds.update", saveCreds);
 
-  // 🔥 CONNECTION HANDLER (FINAL FIX)
+  // CONNECTION HANDLER
   sock.ev.on("connection.update", (update) => {
     const { connection, qr, lastDisconnect } = update;
 
-    // QR DISPLAY FIX (VERY IMPORTANT)
+    // QR CODE
     if (qr) {
       console.log("\n📱 SCAN THIS QR:\n");
       qrcode.generate(qr, { small: true });
-
-      console.log("\n(If QR not visible above, copy raw QR from logs)\n");
     }
 
+    // CONNECTED
     if (connection === "open") {
-      console.log("✅ WhatsApp Connected Successfully!");
+      console.log("✅ WhatsApp Connected Successfully");
     }
 
+    // CLOSED
     if (connection === "close") {
-      const code = lastDisconnect?.error?.output?.statusCode;
+      const statusCode =
+        lastDisconnect?.error?.output?.statusCode;
 
-      console.log("❌ Connection closed. Code:", code);
+      console.log("❌ Connection closed. Code:", statusCode);
 
-      // stop loop if logged out
-      if (code === DisconnectReason.loggedOut) {
-        console.log("🚫 Logged out. Delete auth folder & redeploy.");
-        return;
+      // 🚫 STOP LOOPING ON RENDER (IMPORTANT)
+      if (
+        statusCode === DisconnectReason.loggedOut ||
+        statusCode === 405 ||
+        statusCode === 401
+      ) {
+        console.log("🚫 Session expired. Delete auth folder & rescan QR.");
+        process.exit(1);
       }
 
-      // safe reconnect
-      setTimeout(() => {
-        console.log("🔁 Reconnecting safely...");
-        startBot();
-      }, 5000);
+      console.log("🔁 Restarting safely in 10 seconds...");
+      setTimeout(startBot, 10000);
     }
   });
 }
