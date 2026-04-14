@@ -39,21 +39,34 @@ const client = new Client({
   }
 });
 
-// 📱 QR EVENT (FIXED)
+// 📱 QR EVENT
 client.on("qr", (qr) => {
   console.log("📱 Scan QR below:");
-  console.log(qr); // 👈 important for Render logs
-  qrcode.generate(qr, { small: true }); // works locally
+  console.log(qr); // for Render logs
+  qrcode.generate(qr, { small: true }); // for local
 });
 
-// ✅ Ready
+// ✅ READY
 client.on("ready", () => {
   console.log("✅ WhatsApp Bot Ready!");
 });
 
-// 💾 Session stored
+// 💾 AUTH SAVED
 client.on("authenticated", () => {
   console.log("✅ Session saved in MongoDB");
+});
+
+// 🧪 DEBUG EVENTS (VERY IMPORTANT)
+client.on("loading_screen", (percent, message) => {
+  console.log("⏳ Loading:", percent, message);
+});
+
+client.on("auth_failure", msg => {
+  console.error("❌ Auth failure:", msg);
+});
+
+client.on("disconnected", reason => {
+  console.log("❌ Disconnected:", reason);
 });
 
 // 🌐 Health check
@@ -61,7 +74,7 @@ app.get("/", (req, res) => {
   res.send("✅ Bot is running");
 });
 
-// 🔐 API trigger (cron)
+// 🔐 API trigger
 app.get("/send", async (req, res) => {
   try {
     if (req.query.key !== SECRET_KEY) {
@@ -120,10 +133,16 @@ async function sendGoldRate() {
 
 // ✅ CONNECT DB → THEN START WHATSAPP
 mongoose.connect(MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log("✅ MongoDB connected");
 
-    client.initialize(); // 🚀 start after DB ready
+    try {
+      console.log("🚀 Starting WhatsApp client...");
+      await client.initialize();
+    } catch (err) {
+      console.error("❌ WhatsApp init error:", err.message);
+    }
+
   })
   .catch(err => {
     console.log("❌ Mongo error:", err.message);
